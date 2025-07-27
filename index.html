@@ -69,12 +69,10 @@
     localStorage.setItem('uid', uid);
     startApp(uid);
   });
-  logoutBtn.addEventListener('click', ()=>{
-    localStorage.removeItem('uid');
-    location.reload();
-  });
 
   /* ======================== MAIN APP ======================== */
+  let scanner;   // 전역에 보관 → 로그아웃 시 stop()
+
   function startApp(uid){
     authArea.classList.add('d-none');
     mainUI.classList.remove('d-none');
@@ -83,14 +81,30 @@
   }
 
   function initScanner(uid){
-    const html5QrCode = new Html5Qrcode("reader");
+    if(scanner){
+      try{ scanner.stop(); }catch(e){}
+    }
+    scanner = new Html5Qrcode("reader");
     const config = { fps:10, qrbox:250 };
-    html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccess);
+    scanner.start({ facingMode: "environment" }, config, qrCodeSuccess);
 
     async function qrCodeSuccess(decodedText){
       await sendStamp(uid, decodedText);
     }
   }
+
+  /* ====================== LOGOUT ====================== */
+  logoutBtn.addEventListener('click', async ()=>{
+    if(scanner){
+      try{ await scanner.stop(); }catch(e){}
+      scanner = null;
+    }
+    localStorage.removeItem('uid');
+    counterEl.textContent = '';
+    mainUI.classList.add('d-none');
+    authArea.classList.remove('d-none');
+    uidInput.focus();
+  });
 
   /* =============== APIs =============== */
   async function sendStamp(uid, loc){
