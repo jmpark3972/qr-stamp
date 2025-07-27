@@ -43,7 +43,7 @@
   <div class="modal fade" id="rewardModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content text-center p-4">
-        <h2 class="fw-bold text-success mb-3">🎁 축하합니다!</h2>
+        <h2 class="fw-bold text-success mb-3"> 축하합니다!</h2>
         <p id="reward-text" class="fs-5"></p>
         <button class="btn btn-success" data-bs-dismiss="modal">닫기</button>
       </div>
@@ -52,7 +52,7 @@
 
   <script>
   /* ------------- 설정 ------------- */
-  const API = "https://script.google.com/macros/s/AKfycbzLqm41k7rYaEg9McXEOf1H1lUlBpMMsrW82RrYsDcdpyG-UZEyGlAhYGsbAUQzXA/exec"; // ★ Web App URL
+  const API = "https://script.google.com/macros/s/AKfycbxBxjOXN-VZe2Ra2qT_x8dyoVhfuoL8_vMiQEJoDXKdpxMwTwWM7rhsKRUj-6kq3R0f/exec"; // ★ Web App URL
   const MIN_REWARD = 5;
 
   /* ------------- DOM ------------- */
@@ -87,7 +87,10 @@
     loginView.classList.add('d-none');
     appView.classList.remove('d-none');
     updateCounter(0);
-    fetchStatus();
+    jsonp(`${API}?mode=status&uid=${encodeURIComponent(currentUID)}`, r=>{
+      if(r.ok) updateCounter(r.stamps);
+    });
+}
   }
 
   /* ------------- 카메라 ------------- */
