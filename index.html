@@ -3,136 +3,130 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Green Fest QR Stamp Rally</title>
-  <!-- Bootstrap (CDN) -->
+  <title>Green Fest QR Stamp Rally</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <!-- html5-qrcode -->
   <script src="https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js"></script>
   <style>
-    body { background:#f6fdf7; }
-    #reader { width:100%; max-width:400px; margin:auto; }
-    #stamp-counter { font-size:1.2rem; }
+    body{background:#f6fdf7}
+    #reader{width:100%;max-width:400px;margin:auto;border:2px solid #198754;border-radius:12px}
   </style>
 </head>
-<body class="d-flex flex-column align-items-center pt-4 gap-3">
-  <h1 class="h4 fw-bold text-success">🌿 Green Fest QR 스탬프랠리</h1>
+<body class="d-flex flex-column align-items-center gap-3 pt-4">
+  <h1 class="h4 fw-bold text-success mb-0">🌿 Green Fest QR 스탬프랠리</h1>
+
   <!-- 로그인 영역 -->
-  <div id="auth-area" class="w-100 text-center" style="max-width:380px;">
-    <div class="mb-3">
-      <label class="form-label fw-semibold">학생증 QR 혹은 학번/휴대폰 입력</label>
-      <input id="uid-input" type="text" class="form-control" placeholder="20251234" />
-    </div>
+  <div id="auth-area" class="text-center w-100" style="max-width:380px;">
+    <label class="form-label fw-semibold mt-3">학번 / 휴대폰 번호</label>
+    <input id="uid-input" class="form-control mb-2" placeholder="20251234" />
     <button id="login-btn" class="btn btn-success w-100">로그인</button>
+    <small class="text-muted d-block mt-2">카메라 권한은 로그인 후 요청됩니다.</small>
   </div>
 
-  <!-- 스탬프 메인 UI -->
-  <div id="main-ui" class="d-none flex-column gap-3 align-items-center">
-    <div id="stamp-counter" class="badge text-bg-success px-3 py-2"></div>
-    <div id="reader" class="shadow rounded-3"></div>
-    <button id="logout-btn" class="btn btn-outline-secondary btn-sm mt-2">로그아웃</button>
+  <!-- 메인 UI -->
+  <div id="main-ui" class="d-none w-100 flex-column align-items-center gap-3">
+    <div id="stamp-counter" class="badge text-bg-success fs-6 px-3 py-2"></div>
+
+    <!-- 스캐너 시작 전 안내 -->
+    <button id="start-scan" class="btn btn-outline-success">카메라로 QR 스캔 시작</button>
+    <div id="reader" class="d-none"></div>
+    <div id="scan-msg" class="text-danger small"></div>
+
+    <button id="logout-btn" class="btn btn-outline-secondary btn-sm">로그아웃</button>
   </div>
 
-  <!-- 룰렛 모달 -->
+  <!-- 리워드 모달 -->
   <div class="modal fade" id="rewardModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content text-center p-4">
-        <h2 class="fw-bold text-success">🎁 축하합니다!</h2>
+        <h2 class="fw-bold text-success mb-3">🎁 축하합니다!</h2>
         <p id="reward-text" class="fs-5"></p>
         <button class="btn btn-success" data-bs-dismiss="modal">닫기</button>
       </div>
     </div>
   </div>
 
-  <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-  /* ========================== CONFIG ========================== */
-  const SCRIPT_API_BASE = "https://script.google.com/macros/s/AKfycbyRe_83IJ0G_bBSd2xAD6Cc0fgOX-71X8jIEzJ5bohs8fft0_MN8bWFhB072T_SiBoZ/exec"; // <-- Apps Script Web App URL
+  /* ========= CONFIG ========= */
+  const SCRIPT_API_BASE = "https://script.google.com/macros/s/AKfycbyRe_83IJ0G_bBSd2xAD6Cc0fgOX-71X8jIEzJ5bohs8fft0_MN8bWFhB072T_SiBoZ/exec"; // ★ replace with your WebApp URL
   const MIN_STAMPS_FOR_REWARD = 5;
 
-  /* ====================== AUTH & STATE ====================== */
-  const uidInput   = document.getElementById('uid-input');
-  const loginBtn   = document.getElementById('login-btn');
-  const authArea   = document.getElementById('auth-area');
-  const mainUI     = document.getElementById('main-ui');
-  const counterEl  = document.getElementById('stamp-counter');
-  const logoutBtn  = document.getElementById('logout-btn');
-  const rewardModal= new bootstrap.Modal(document.getElementById('rewardModal'));
-  const rewardTxt  = document.getElementById('reward-text');
+  /* ====== ELEMENTS ====== */
+  const authArea     = document.getElementById('auth-area');
+  const uidInput     = document.getElementById('uid-input');
+  const loginBtn     = document.getElementById('login-btn');
+  const mainUI       = document.getElementById('main-ui');
+  const counterEl    = document.getElementById('stamp-counter');
+  const startScanBtn = document.getElementById('start-scan');
+  const readerDiv    = document.getElementById('reader');
+  const scanMsg      = document.getElementById('scan-msg');
+  const logoutBtn    = document.getElementById('logout-btn');
+  const rewardTxt    = document.getElementById('reward-text');
+  const rewardModal  = new bootstrap.Modal(document.getElementById('rewardModal'));
 
-  let currentUID   = localStorage.getItem('uid');
-  if(currentUID){ startApp(currentUID); }
+  let scanner;  // global html5-qrcode instance
+  let currentUID = localStorage.getItem('uid') || '';
+  if(currentUID){ initApp(currentUID); }
 
-  loginBtn.addEventListener('click', ()=>{
+  loginBtn.onclick = ()=>{
     const uid = uidInput.value.trim();
-    if(!uid){ alert('학번/휴대폰을 입력하세요'); return; }
+    if(!uid) { alert('학번/휴대폰을 입력하세요'); return; }
     localStorage.setItem('uid', uid);
-    startApp(uid);
-  });
+    initApp(uid);
+  };
 
-  /* ======================== MAIN APP ======================== */
-  let scanner;   // 전역에 보관 → 로그아웃 시 stop()
-
-  function startApp(uid){
+  function initApp(uid){
     authArea.classList.add('d-none');
     mainUI.classList.remove('d-none');
-    initScanner(uid);
-    fetchStamp(uid); // 기존 스탬프 불러오기
+    counterEl.textContent = '내 스탬프: ...';
+    fetchStamp(uid);
+    startScanBtn.onclick = ()=> startScanner(uid);
   }
 
-  function initScanner(uid){
-    if(scanner){
-      try{ scanner.stop(); }catch(e){}
-    }
-    scanner = new Html5Qrcode("reader");
-    const config = { fps:10, qrbox:250 };
-    scanner.start({ facingMode: "environment" }, config, qrCodeSuccess);
-
-    async function qrCodeSuccess(decodedText){
-      await sendStamp(uid, decodedText);
+  async function startScanner(uid){
+    if(scanner){ await scanner.stop(); }
+    scanMsg.textContent = '';
+    readerDiv.classList.remove('d-none');
+    startScanBtn.classList.add('d-none');
+    scanner = new Html5Qrcode('reader');
+    const config = { fps:10, qrbox:230 };
+    try{
+      await scanner.start({facingMode:'environment'}, config, async decoded=>{
+        await sendStamp(uid, decoded.trim());
+      });
+    }catch(err){
+      scanMsg.textContent = '카메라 사용을 허용해야 합니다.';
+      readerDiv.classList.add('d-none');
+      startScanBtn.classList.remove('d-none');
     }
   }
 
-  /* ====================== LOGOUT ====================== */
-  logoutBtn.addEventListener('click', async ()=>{
-    if(scanner){
-      try{ await scanner.stop(); }catch(e){}
-      scanner = null;
-    }
+  logoutBtn.onclick = async ()=>{
+    if(scanner){ try{ await scanner.stop(); }catch(e){} }
     localStorage.removeItem('uid');
-    counterEl.textContent = '';
     mainUI.classList.add('d-none');
     authArea.classList.remove('d-none');
-    uidInput.focus();
-  });
+    uidInput.value='';
+  };
 
-  /* =============== APIs =============== */
-  async function sendStamp(uid, loc){
-    try{
-      const res = await fetch(`${SCRIPT_API_BASE}?mode=stamp&uid=${encodeURIComponent(uid)}&loc=${encodeURIComponent(loc)}`);
-      const data = await res.json();
-      if(data.ok){
-        updateCounter(data.stamps);
-        if(data.reward){ showReward(data.reward); }
-      }else{
-        alert(data.msg || 'Stamp 실패');
-      }
-    }catch(err){ console.error(err); alert('네트워크 오류'); }
-  }
+  /* -------- API CALLS -------- */
   async function fetchStamp(uid){
     try{
-      const res = await fetch(`${SCRIPT_API_BASE}?mode=status&uid=${encodeURIComponent(uid)}`);
-      const data = await res.json();
-      if(data.ok){ updateCounter(data.stamps); }
-    }catch(err){ console.error(err); }
+      const r = await fetch(`${SCRIPT_API_BASE}?mode=status&uid=${encodeURIComponent(uid)}`);
+      const j = await r.json();
+      if(j.ok) updateCounter(j.stamps);
+    }catch(e){ counterEl.textContent='오류'; }
   }
-  function updateCounter(stamps){
-    counterEl.textContent = `내 스탬프: ${stamps}`;
+  async function sendStamp(uid, loc){
+    try{
+      const r = await fetch(`${SCRIPT_API_BASE}?mode=stamp&uid=${encodeURIComponent(uid)}&loc=${encodeURIComponent(loc)}`);
+      const j = await r.json();
+      if(!j.ok){ scanMsg.textContent = j.msg; return; }
+      updateCounter(j.stamps);
+      if(j.reward) { rewardTxt.textContent = j.reward; rewardModal.show(); }
+    }catch(e){ scanMsg.textContent = '네트워크 오류'; }
   }
-  function showReward(reward){
-    rewardTxt.textContent = reward;
-    rewardModal.show();
-  }
+  function updateCounter(stamps){ counterEl.textContent = `내 스탬프: ${stamps}`; }
   </script>
 </body>
 </html>
